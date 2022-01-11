@@ -234,19 +234,6 @@ def main(args):
     if not tracker:
         sys.stderr.write(" Unable to create tracker \n")
 
-    sgie1 = Gst.ElementFactory.make("nvinfer", "secondary1-nvinference-engine")
-    if not sgie1:
-        sys.stderr.write(" Unable to make sgie1 \n")
-
-
-    sgie2 = Gst.ElementFactory.make("nvinfer", "secondary2-nvinference-engine")
-    if not sgie2:
-        sys.stderr.write(" Unable to make sgie2 \n")
-
-    sgie3 = Gst.ElementFactory.make("nvinfer", "secondary3-nvinference-engine")
-    if not sgie3:
-        sys.stderr.write(" Unable to make sgie3 \n")
-
     nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
@@ -283,11 +270,8 @@ def main(args):
     # Set sync = false to avoid late frame drops at the display-sink
     sink.set_property('sync', False)
 
-    #Set properties of pgie and sgie
+    #Set properties of pgie
     pgie.set_property('config-file-path', "pgie_config.txt")
-    sgie1.set_property('config-file-path', "sgie1_config.txt")
-    sgie2.set_property('config-file-path', "sgie2_config.txt")
-    sgie3.set_property('config-file-path', "sgie3_config.txt")
 
     #Set properties of tracker
     config = configparser.ConfigParser()
@@ -326,9 +310,6 @@ def main(args):
     pipeline.add(streammux)
     pipeline.add(pgie)
     pipeline.add(tracker)
-    pipeline.add(sgie1)
-    pipeline.add(sgie2)
-    pipeline.add(sgie3)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
     pipeline.add(sink)
@@ -353,10 +334,7 @@ def main(args):
     srcpad.link(sinkpad)
     streammux.link(pgie)
     pgie.link(tracker)
-    tracker.link(sgie1)
-    sgie1.link(sgie2)
-    sgie2.link(sgie3)
-    sgie3.link(nvvidconv)
+    tracker.link(nvvidconv)
     nvvidconv.link(nvosd)
     if is_aarch64():
         nvosd.link(transform)
