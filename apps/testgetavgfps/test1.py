@@ -165,9 +165,13 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
                 break
     return Gst.PadProbeReturn.OK	
 
-def on_fps_measurements(element, fps, droprate, avg, appsink):
-    caps = appsink.get_static_pad('sink').get_current_caps()
-    print('fps: {:.2f} avg: {:.2f} caps: {}'.format(fps, avg, caps))
+#def on_fps_measurements(element, fps, droprate, avg, appsink):
+    #caps = appsink.get_static_pad('sink').get_current_caps()
+    #print('fps: {:.2f} avg: {:.2f} caps: {}'.format(fps, avg, caps))
+def on_fps_measurements(
+    gst_buffer = info.get_buffer()
+    batch_meta = pyds.gst_buffer_get_nvds_user_data(hash(gst_buffer))
+
 
 def main(args):
     # Check input arguments
@@ -238,19 +242,6 @@ def main(args):
     if not tracker:
         sys.stderr.write(" Unable to create tracker \n")
 
-    sgie1 = Gst.ElementFactory.make("nvinfer", "secondary1-nvinference-engine")
-    if not sgie1:
-        sys.stderr.write(" Unable to make sgie1 \n")
-
-
-    sgie2 = Gst.ElementFactory.make("nvinfer", "secondary2-nvinference-engine")
-    if not sgie2:
-        sys.stderr.write(" Unable to make sgie2 \n")
-
-    sgie3 = Gst.ElementFactory.make("nvinfer", "secondary3-nvinference-engine")
-    if not sgie3:
-        sys.stderr.write(" Unable to make sgie3 \n")
-
     nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
@@ -279,10 +270,11 @@ def main(args):
     sink = Gst.ElementFactory.make("fpsdisplaysink", "fps-display")
     if not sink:
         sys.stderr.write(" Unable to create fpssink \n")
-    sink.set_property('text-overlay', True)
+    sink.set_property('video-sink', videosink)    
+    sink.set_property('text-overlay', False)
     sink.set_property('signal-fps-measurements', True)
     sink.set_property('sync', False)
-    sink.set_property('video-sink', videosink)
+    
 
     print("Playing cam %s " %args[1])
     caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, framerate=30/1"))
@@ -292,15 +284,11 @@ def main(args):
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', 1)
     streammux.set_property('batched-push-timeout', 4000000)
-    #pgie.set_property('config-file-path', "dstest1_pgie_config.txt")
-    # Set sync = false to avoid late frame drops at the display-sink
-    #sink.set_property('sync', False)
 
-    #Set properties of pgie and sgie
+
+
+    #Set properties of pgie
     pgie.set_property('config-file-path', "dstest2_pgie_config.txt")
-    sgie1.set_property('config-file-path', "dstest2_sgie1_config.txt")
-    sgie2.set_property('config-file-path', "dstest2_sgie2_config.txt")
-    sgie3.set_property('config-file-path', "dstest2_sgie3_config.txt")
 
     #Set properties of tracker
     config = configparser.ConfigParser()
@@ -339,9 +327,6 @@ def main(args):
     pipeline.add(streammux)
     pipeline.add(pgie)
     pipeline.add(tracker)
-    pipeline.add(sgie1)
-    pipeline.add(sgie2)
-    pipeline.add(sgie3)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
     pipeline.add(sink)
@@ -366,10 +351,7 @@ def main(args):
     srcpad.link(sinkpad)
     streammux.link(pgie)
     pgie.link(tracker)
-    tracker.link(sgie1)
-    sgie1.link(sgie2)
-    sgie2.link(sgie3)
-    sgie3.link(nvvidconv)
+    tracker.link(nvvidconv)
     nvvidconv.link(nvosd)
     if is_aarch64():
         nvosd.link(transform)
@@ -391,6 +373,11 @@ def main(args):
     if not osdsinkpad:
         sys.stderr.write(" Unable to get sink pad of nvosd \n")
     osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
+
+    fpssinkpad = nvosd.get_static_pad("sink")
+    if not fpssinkpad:
+        sys.stderr.write(" Unable to get sink pad of nvosd \n")
+    fpssinkpad.add_probe(Gst.PadProbeType.BUFFER, on_fps_measurements, 0)
 
 
     print("Starting pipeline \n")

@@ -15,24 +15,11 @@
 # limitations under the License.
 ################################################################################
 
-import time
-start_time=time.time()
-frame_count=0
+import platform
+import sys
 
-class GETFPS:
-    def __init__(self,stream_id):
-        global start_time
-        self.start_time=start_time
-        self.is_first=True
-        global frame_count
-        self.frame_count=frame_count
-        self.stream_id=stream_id
-    def print_data(self):
-        print('frame_count=',self.frame_count)
-        print('start_time=',self.start_time)
-    def calc_fps(self):
-        end_time=time.time()
-        elapsed_time = end_time - self.start_time
-        current_fps = 1.0/float(elapsed_time)
-        self.start_time=end_time
-        return current_fps
+
+def is_aarch64():
+    return platform.uname()[4] == 'aarch64'
+
+sys.path.append('/opt/nvidia/deepstream/deepstream/lib')

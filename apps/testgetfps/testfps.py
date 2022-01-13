@@ -38,8 +38,8 @@ PGIE_CLASS_ID_ROADSIGN = 3
 past_tracking_meta=[0]
 
 fps_streams={}
-prev_frame_time = 0
-new_frame_time = 0
+fpsarray=[]
+
 
 def osd_sink_pad_buffer_probe(pad,info,u_data):
     frame_number=0
@@ -96,15 +96,17 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         
         # FPS Counter
         # Get frame rate through this probe
-        fps_streams=GETFPS(0)
-        fps = fps_streams.calc_fps()
+        fps = fps_streams["stream{0}".format(frame_meta.pad_index)].calc_fps()
+        fpsarray.append(fps)
+        fps = "%.1f"%(fps)
+        avg = "%.1f"%(sum(fpsarray)/len(fpsarray))
 
         # Setting display text to be shown on screen
         # Note that the pyds module allocates a buffer for the string, and the
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        py_nvosd_text_params.display_text = "FPS={} Frame Number={} Number of Objects={} Vehicle_count={} Person_count={}".format(fps, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
+        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avg, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
         
 	
 
@@ -125,6 +127,8 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         # Using pyds.get_string() to get display_text as string
         print(pyds.get_string(py_nvosd_text_params.display_text))
         pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
+
+        
         try:
             l_frame=l_frame.next
         except StopIteration:
@@ -179,6 +183,10 @@ def main(args):
     if len(args) != 2:
         sys.stderr.write("usage: %s <v4l2-device-path>\n" % args[0])
         sys.exit(1)
+
+    for i in range(0,len(args)-1):
+        fps_streams["stream{0}".format(i)]=GETFPS(i)
+    number_sources=len(args)-1
 
     # Standard GStreamer initialization
     GObject.threads_init()
