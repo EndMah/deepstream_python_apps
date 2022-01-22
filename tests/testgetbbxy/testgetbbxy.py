@@ -64,7 +64,7 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
     #write_mot_track_output(batch_meta)
     l_frame = batch_meta.frame_meta_list
     while l_frame is not None:
-        f=open("det.txt","w+")
+        f=open("track.txt","w+")
         try:
             # Note that l_frame.data needs a cast to pyds.NvDsFrameMeta
             # The casting is done by pyds.NvDsFrameMeta.cast()
@@ -378,7 +378,7 @@ def main(args):
     
     # cleanup
     # sort motchallenge .txt file with the frame number and id
-    fn = 'det.txt'
+    fn = 'track.txt'
     sorted_fn = 'sorted.txt'
 
     with open(fn,'r') as first_file:
