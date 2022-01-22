@@ -36,6 +36,8 @@ PGIE_CLASS_ID_BICYCLE = 1
 PGIE_CLASS_ID_PERSON = 2
 PGIE_CLASS_ID_ROADSIGN = 3
 past_tracking_meta=[0]
+fps_streams={}
+fpsarray=[]
 
 def osd_sink_pad_buffer_probe(pad,info,u_data):
     frame_number=0
@@ -91,13 +93,18 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         py_nvosd_text_params = display_meta.text_params[0]
         
         # FPS Counter
-        # fps = GETFPS(0).calc_fps()
+        # Get frame rate through this probe
+        fps = fps_streams["stream{0}".format(frame_meta.pad_index)].calc_fps()
+        fpsarray.append(fps)
+        fps = "%.1f"%(fps)
+        avg = "%.1f"%(sum(fpsarray)/len(fpsarray))
+
         # Setting display text to be shown on screen
         # Note that the pyds module allocates a buffer for the string, and the
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        py_nvosd_text_params.display_text = "Frame Number={} Number of Objects={} Vehicle_count={} Person_count={}".format(frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
+        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avg, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
 
         # Now set the offsets where the string should appear
         py_nvosd_text_params.x_offset = 10
@@ -170,6 +177,10 @@ def main(args):
     if len(args) != 2:
         sys.stderr.write("usage: %s <v4l2-device-path>\n" % args[0])
         sys.exit(1)
+
+    for i in range(0,len(args)-1):
+        fps_streams["stream{0}".format(i)]=GETFPS(i)
+    number_sources=len(args)-1
 
     # Standard GStreamer initialization
     GObject.threads_init()
@@ -260,15 +271,16 @@ def main(args):
         sys.stderr.write(" Unable to create egl sink \n")
 
     print("Playing cam %s " %args[1])
-    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, framerate=30/1"))
+    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, height=720"))
     caps_vidconvsrc.set_property('caps', Gst.Caps.from_string("video/x-raw(memory:NVMM)"))
     source.set_property('device', args[1])
     streammux.set_property('width', 1920)
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', 1)
     streammux.set_property('batched-push-timeout', 4000000)
+    streammux.set_property('live-source', 1)
     # Set sync = false to avoid late frame drops at the display-sink
-    sink.set_property('sync', False)
+    sink.set_property('sync', 0)
 
     #Set properties of pgie
     pgie.set_property('config-file-path', "pgie_config.txt")

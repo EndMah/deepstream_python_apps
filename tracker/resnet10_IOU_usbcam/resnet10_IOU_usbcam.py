@@ -24,9 +24,10 @@ import configparser
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+from gi.repository import GObject, Gst, GLib, GstBase
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
+from common.FPS import GETFPS
 
 import pyds
 
@@ -35,6 +36,8 @@ PGIE_CLASS_ID_BICYCLE = 1
 PGIE_CLASS_ID_PERSON = 2
 PGIE_CLASS_ID_ROADSIGN = 3
 past_tracking_meta=[0]
+fps_streams={}
+fpsarray=[]
 
 def osd_sink_pad_buffer_probe(pad,info,u_data):
     frame_number=0
@@ -88,12 +91,20 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         display_meta=pyds.nvds_acquire_display_meta_from_pool(batch_meta)
         display_meta.num_labels = 1
         py_nvosd_text_params = display_meta.text_params[0]
+        
+        # FPS Counter
+        # Get frame rate through this probe
+        fps = fps_streams["stream{0}".format(frame_meta.pad_index)].calc_fps()
+        fpsarray.append(fps)
+        fps = "%.1f"%(fps)
+        avg = "%.1f"%(sum(fpsarray)/len(fpsarray))
+
         # Setting display text to be shown on screen
         # Note that the pyds module allocates a buffer for the string, and the
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        py_nvosd_text_params.display_text = "Frame Number={} Number of Objects={} Vehicle_count={} Person_count={}".format(frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
+        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avg, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
 
         # Now set the offsets where the string should appear
         py_nvosd_text_params.x_offset = 10
@@ -167,6 +178,10 @@ def main(args):
         sys.stderr.write("usage: %s <v4l2-device-path>\n" % args[0])
         sys.exit(1)
 
+    for i in range(0,len(args)-1):
+        fps_streams["stream{0}".format(i)]=GETFPS(i)
+    number_sources=len(args)-1
+
     # Standard GStreamer initialization
     GObject.threads_init()
     Gst.init(None)
@@ -230,19 +245,6 @@ def main(args):
     if not tracker:
         sys.stderr.write(" Unable to create tracker \n")
 
-    sgie1 = Gst.ElementFactory.make("nvinfer", "secondary1-nvinference-engine")
-    if not sgie1:
-        sys.stderr.write(" Unable to make sgie1 \n")
-
-
-    sgie2 = Gst.ElementFactory.make("nvinfer", "secondary2-nvinference-engine")
-    if not sgie2:
-        sys.stderr.write(" Unable to make sgie2 \n")
-
-    sgie3 = Gst.ElementFactory.make("nvinfer", "secondary3-nvinference-engine")
-    if not sgie3:
-        sys.stderr.write(" Unable to make sgie3 \n")
-
     nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
@@ -264,25 +266,24 @@ def main(args):
 
     print("Creating EGLSink \n")
     sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
+    #sink = Gst.ElementFactory.make("nvoverlaysink", "nvvideo-renderer")
     if not sink:
         sys.stderr.write(" Unable to create egl sink \n")
 
     print("Playing cam %s " %args[1])
-    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, framerate=30/1"))
+    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, height=720"))
     caps_vidconvsrc.set_property('caps', Gst.Caps.from_string("video/x-raw(memory:NVMM)"))
     source.set_property('device', args[1])
     streammux.set_property('width', 1920)
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', 1)
     streammux.set_property('batched-push-timeout', 4000000)
+    streammux.set_property('live-source', 1)
     # Set sync = false to avoid late frame drops at the display-sink
-    sink.set_property('sync', False)
+    sink.set_property('sync', 0)
 
-    #Set properties of pgie and sgie
+    #Set properties of pgie
     pgie.set_property('config-file-path', "pgie_config.txt")
-    sgie1.set_property('config-file-path', "sgie1_config.txt")
-    sgie2.set_property('config-file-path', "sgie2_config.txt")
-    sgie3.set_property('config-file-path', "sgie3_config.txt")
 
     #Set properties of tracker
     config = configparser.ConfigParser()
@@ -321,9 +322,6 @@ def main(args):
     pipeline.add(streammux)
     pipeline.add(pgie)
     pipeline.add(tracker)
-    pipeline.add(sgie1)
-    pipeline.add(sgie2)
-    pipeline.add(sgie3)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
     pipeline.add(sink)
@@ -348,10 +346,7 @@ def main(args):
     srcpad.link(sinkpad)
     streammux.link(pgie)
     pgie.link(tracker)
-    tracker.link(sgie1)
-    sgie1.link(sgie2)
-    sgie2.link(sgie3)
-    sgie3.link(nvvidconv)
+    tracker.link(nvvidconv)
     nvvidconv.link(nvosd)
     if is_aarch64():
         nvosd.link(transform)
