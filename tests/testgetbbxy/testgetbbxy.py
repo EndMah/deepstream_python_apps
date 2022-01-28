@@ -22,6 +22,7 @@ import sys
 sys.path.append('../')
 import platform
 import configparser
+import cv2
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -107,6 +108,7 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
                 break
         f.writelines(motarray)
         f.close()
+        
         # Acquiring a display meta object. The memory ownership remains in
         # the C code so downstream plugins can still access it. Otherwise
         # the garbage collector will claim it when this probe function exits.
@@ -338,8 +340,11 @@ def main(args):
 
     print("Playing file %s " %args[1])
     #source.set_property('location', args[1])
-    streammux.set_property('width', 1920)
-    streammux.set_property('height', 1080)
+    vid = cv2.VideoCapture(args[1])
+    vidwidth = vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+    vidheight = vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    streammux.set_property('width', vidwidth)
+    streammux.set_property('height', vidheight)
     streammux.set_property('batch-size', 1)
     streammux.set_property('batched-push-timeout', 4000000)
     streammux.set_property('live-source', 1)
