@@ -1,4 +1,36 @@
-# DeepStream Python Apps
+# Repository for Bachelor Thesis
+
+Author: Endrika Mahaputra 
+
+Field of Study: Automotive Information Technology
+
+University: HTWG Konstanz
+
+Bachelor Thesis Title: "Vergleich von Algorithmen für die Echtzeit-Mehrobjektverfolgung auf dem Nvidia Jetson Nano"
+
+Repository is forked from: https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
+
+This repository contains python apps to run deepstream tracker pipeline with either uri source such as .mp4 file for MOTChallenge Benchmark or usb camera for real-time comparison.
+
+Please refer to [HOW-TO Guide](HOWTO.md) to install prerequisites, to clone this repository in the right directory, and to run the applications.
+
+If directory is locked to root: 
+```
+sudo chown -R <user>:<user> /opt/nvidia/deepstream
+```
+and replace <user> with the name of current user.
+
+Example how to run script using .mp4 file:
+```
+cd /opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/tracker/resnet10_DCF
+python3 resnet10_DCF.py file:///opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/streams/MOT16/MOT16-02.mp4
+
+```
+In the folder ```/result``` there will be a text file of tracker data that is necessary for MOTChallenge MOT16 benchmark with [TrackEval](https://github.com/JonathonLuiten/TrackEval/tree/master/docs/MOTChallenge-Official). MOT16-train benchmark requires tracker data from MOT16-02.mp4, MOT16-04.mp4, MOT16-05.mp4, MOT16-09.mp4, MOT16-010.mp4, MOT16-11.mp4 and MOT16-13.mp4, that is provided in [streams](streams).
+
+
+
+# DeepStream Python Apps Original README.md
 
 This repository contains Python bindings and sample applications for the [DeepStream SDK](https://developer.nvidia.com/deepstream-sdk).  
 
