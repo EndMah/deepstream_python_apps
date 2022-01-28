@@ -18,7 +18,7 @@ If directory is locked to root:
 ```
 sudo chown -R <user>:<user> /opt/nvidia/deepstream
 ```
-and replace <user> with the name of current user.
+and replace ```<user>``` with the name of current user.
 
 Example how to run script using .mp4 file:
 ```
