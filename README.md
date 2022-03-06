@@ -22,12 +22,18 @@ and replace ```<user>``` with the name of current user.
 
 Example how to run script using .mp4 file:
 ```
-cd /opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/tracker/resnet10_DCF
-python3 resnet10_DCF.py file:///opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/streams/MOT16/MOT16-02.mp4
+cd /opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/tracker/detectnet_DCF
+python3 detectnet_DCF.py file:///opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/streams/MOT16/MOT16-02.mp4
 
 ```
 In the folder ```/result``` there will be a text file of tracker data that is necessary for MOTChallenge MOT16 benchmark with [TrackEval](https://github.com/JonathonLuiten/TrackEval/tree/master/docs/MOTChallenge-Official). MOT16-train benchmark requires tracker data from MOT16-02.mp4, MOT16-04.mp4, MOT16-05.mp4, MOT16-09.mp4, MOT16-010.mp4, MOT16-11.mp4 and MOT16-13.mp4, that is provided in [streams](streams).
 
+Example how to run script using USB Camera:
+```
+cd /opt/nvidia/deepstream/deepstream-6.0/sources/deepstream_python_apps/tracker/detectnet_DCF_usbcam
+python3 detectnet_DCF_usbcam.py /dev/video0
+
+```
 
 
 # DeepStream Python Apps Original README.md
