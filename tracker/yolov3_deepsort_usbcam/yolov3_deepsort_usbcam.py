@@ -17,20 +17,34 @@
 # limitations under the License.
 ################################################################################
 
+import os
 import sys
+import signal
 sys.path.append('../')
 import platform
 import configparser
-
+import cv2
+import pyds
+import time
 import gi
+import shutil
+import psutil
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst, GLib, GstBase
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
 
-import pyds
+# Experiment configs
+# number of objects in real time experiment
+num_obj=2
+# Experiment runtime in seconds 
+runtime=15
+# camera resolution
+width=1280
+height=720
 
+timestr = time.strftime("%Y%m%d-%H%M%S")
 PGIE_CLASS_ID_VEHICLE = 0
 PGIE_CLASS_ID_BICYCLE = 1
 PGIE_CLASS_ID_PERSON = 2
@@ -38,10 +52,24 @@ PGIE_CLASS_ID_ROADSIGN = 3
 past_tracking_meta=[0]
 fps_streams={}
 fpsarray=[]
+motarray=[]
+cpuarray=[]
+memarray=[]
+swaparray=[]
+utilsarray=[]
+
+# MOTA values, with mme calculated manually from video
+miss=0
+fp=0
+gt=0
 
 def osd_sink_pad_buffer_probe(pad,info,u_data):
     frame_number=0
-    #Intiallizing object counter with 0.
+    global miss
+    global fp
+    global gt
+    global num_obj
+    #Intializing object counter with 0.
     obj_counter = {
         PGIE_CLASS_ID_VEHICLE:0,
         PGIE_CLASS_ID_PERSON:0,
@@ -60,6 +88,9 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
     l_frame = batch_meta.frame_meta_list
     while l_frame is not None:
+        f=open("track.txt","w+")
+        mota=open("mota.txt","w+")
+        txtutils=open("utils.txt","w+")
         try:
             # Note that l_frame.data needs a cast to pyds.NvDsFrameMeta
             # The casting is done by pyds.NvDsFrameMeta.cast()
@@ -70,9 +101,21 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         except StopIteration:
             break
 
-        frame_number=frame_meta.frame_num
+        frame_number=frame_meta.frame_num+1
         num_rects = frame_meta.num_obj_meta
         l_obj=frame_meta.obj_meta_list
+        
+        # gathering MOTA values, with mme calculated manually from video
+        # total gt
+        gt+=num_obj
+        # total miss
+        if num_rects<num_obj:
+            miss+=1
+        # total fp
+        if num_rects>num_obj:
+            fp+=1
+        motavalues="miss="+str(miss)+"\nfp="+str(fp)+"\ngt="+str(gt)
+        mota.write(motavalues)    
         while l_obj is not None:
             try:
                 # Casting l_obj.data to pyds.NvDsObjectMeta
@@ -80,11 +123,30 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
             except StopIteration:
                 break
             obj_counter[obj_meta.class_id] += 1
+            class_id = obj_meta.class_id
+            uniqueId = obj_meta.object_id
+            left = round(obj_meta.rect_params.left)
+            top = round(obj_meta.rect_params.top)
+            width = round(obj_meta.rect_params.width)
+            height = round(obj_meta.rect_params.height)
+            confidence = round(obj_meta.confidence,2)
+            centroid_x=int(round(left+(width/2)))
+            centroid_y=int(round(top+(height/2)))
+            print(f'ID:{uniqueId} centroid:{centroid_x},{centroid_y} confidence:{confidence}')
+            
+            # saving to text file: frame_number,ID,centroid_x,centroid_y,confidence,numberofObjects
+            motarray.append(str(frame_number)+","+str(uniqueId)+","+str(centroid_x)+","+str(centroid_y)+","+str(confidence)+","+str(num_rects))
+            motarray.append("\n")
+            
             try: 
                 l_obj=l_obj.next
             except StopIteration:
                 break
-
+        f.writelines(motarray)
+        f.close()
+        mota.close()
+        
+        
         # Acquiring a display meta object. The memory ownership remains in
         # the C code so downstream plugins can still access it. Otherwise
         # the garbage collector will claim it when this probe function exits.
@@ -97,14 +159,26 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         fps = fps_streams["stream{0}".format(frame_meta.pad_index)].calc_fps()
         fpsarray.append(fps)
         fps = "%.1f"%(fps)
-        avg = "%.1f"%(sum(fpsarray)/len(fpsarray))
-
+        avgfps = "%.1f"%(sum(fpsarray)/len(fpsarray))
+        # cpu usage counter
+        cpu = psutil.cpu_percent()
+        cpuarray.append(cpu)
+        avgcpu = "%.1f"%(sum(cpuarray)/len(cpuarray))
+        # memory usage counter
+        memory = psutil.virtual_memory().percent
+        memarray.append(memory)
+        avgmem = "%.1f"%(sum(memarray)/len(memarray))
+        # swap usage counter
+        swap = psutil.swap_memory().percent
+        swaparray.append(swap)
+        avgswap = "%.1f"%(sum(swaparray)/len(swaparray))
+        
         # Setting display text to be shown on screen
         # Note that the pyds module allocates a buffer for the string, and the
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avg, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
+        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nCPU={}% AvgCPU={}% Memory={}% Avg Memory={}% Swap={}% Avg Swap={}%\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avgfps, frame_number, cpu, avgcpu, memory, avgmem, swap, avgswap, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
 
         # Now set the offsets where the string should appear
         py_nvosd_text_params.x_offset = 10
@@ -123,6 +197,9 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         # Using pyds.get_string() to get display_text as string
         print(pyds.get_string(py_nvosd_text_params.display_text))
         pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
+        
+        txtutils.writelines('AvgFPS='+avgfps+'AvgCPU='+avgcpu+'%\nAvgMem='+avgmem+'%\nAvgSwap='+avgswap+'%')
+        txtutils.close()
         try:
             l_frame=l_frame.next
         except StopIteration:
@@ -172,16 +249,40 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
                 break
     return Gst.PadProbeReturn.OK	
 
+def mota_values(num_rects):
+    mota=open("mota.txt","w+")
+    # gathering MOTA values
+    # total gt
+    gt+=num_obj
+    # total miss
+    if num_rects<num_obj:
+        miss+=1
+    # total fp
+    if num_rects>num_obj:
+        fp+=1
+    motavalues="miss="+str(miss)+"\nfp="+str(fp)+"\ngt="+str(gt)
+    mota.write(motavalues)
+    mota.close()
+
+def quit_loop(loop):
+    loop.quit()
+    
 def main(args):
     # Check input arguments
     if len(args) != 2:
         sys.stderr.write("usage: %s <v4l2-device-path>\n" % args[0])
         sys.exit(1)
-
+    
+    if not os.path.exists('results/'):
+        os.makedirs('results/')
+        
+    #get name of script
+    script=os.path.basename(args[0])
+    script=os.path.splitext(script)[0]
     for i in range(0,len(args)-1):
         fps_streams["stream{0}".format(i)]=GETFPS(i)
     number_sources=len(args)-1
-
+    
     # Standard GStreamer initialization
     GObject.threads_init()
     Gst.init(None)
@@ -259,28 +360,51 @@ def main(args):
 
     if not nvosd:
         sys.stderr.write(" Unable to create nvosd \n")
+    
+    nvvidconv2 = Gst.ElementFactory.make("nvvideoconvert", "convertor2")
+    if not nvvidconv2:
+        sys.stderr.write(" Unable to create nvvidconv2 \n")
 
-    # Finally render the osd output
-    if is_aarch64():
-        transform = Gst.ElementFactory.make("nvegltransform", "nvegl-transform")
+    capsfilter = Gst.ElementFactory.make("capsfilter", "capsfilter")
+    if not capsfilter:
+        sys.stderr.write(" Unable to create capsfilter \n")
 
-    print("Creating EGLSink \n")
-    sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
-    #sink = Gst.ElementFactory.make("nvoverlaysink", "nvvideo-renderer")
+    caps = Gst.Caps.from_string("video/x-raw(memory:NVMM), format=I420")
+    capsfilter.set_property("caps", caps)
+
+    encoder = Gst.ElementFactory.make("nvv4l2h264enc", "encoder")
+    if not encoder:
+        sys.stderr.write(" Unable to create encoder \n")
+    encoder.set_property("bitrate", 2000000)
+    print("Creating Code Parser \n")
+    codeparser = Gst.ElementFactory.make("h264parse", "mpeg4-parser")
+    if not codeparser:
+        sys.stderr.write(" Unable to create code parser \n")
+
+    print("Creating Container \n")
+    container = Gst.ElementFactory.make("matroskamux", "matroskamux")
+    if not container:
+        sys.stderr.write(" Unable to create code parser \n")
+    
+    print("Creating FILESINK \n")
+    sink = Gst.ElementFactory.make("filesink", "filesink")
     if not sink:
-        sys.stderr.write(" Unable to create egl sink \n")
-
+        sys.stderr.write(" Unable to create file sink \n")
+        
+    sink.set_property("location", 'results/'+script+'_'+timestr+'.mkv')
+    sink.set_property("sync", 1)
+    sink.set_property("async", 0)
+    sink.set_property("qos",0)
+    
     print("Playing cam %s " %args[1])
-    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, height=720"))
+    caps_v4l2src.set_property('caps', Gst.Caps.from_string("video/x-raw, height={}".format(height)))
     caps_vidconvsrc.set_property('caps', Gst.Caps.from_string("video/x-raw(memory:NVMM)"))
     source.set_property('device', args[1])
-    streammux.set_property('width', 1920)
-    streammux.set_property('height', 1080)
+    streammux.set_property('width', width)
+    streammux.set_property('height', height)
     streammux.set_property('batch-size', 1)
     streammux.set_property('batched-push-timeout', 4000000)
     streammux.set_property('live-source', 1)
-    # Set sync = false to avoid late frame drops at the display-sink
-    sink.set_property('sync', False)
 
     #Set properties of pgie
     pgie.set_property('config-file-path', "pgie_config.txt")
@@ -324,9 +448,12 @@ def main(args):
     pipeline.add(tracker)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
+    pipeline.add(nvvidconv2)
+    pipeline.add(encoder)
+    pipeline.add(capsfilter)
+    pipeline.add(codeparser)
+    pipeline.add(container)
     pipeline.add(sink)
-    if is_aarch64():
-        pipeline.add(transform)
 
     # we link the elements together
     # v4l2src -> nvvideoconvert -> mux -> 
@@ -336,7 +463,7 @@ def main(args):
     caps_v4l2src.link(vidconvsrc)
     vidconvsrc.link(nvvidconvsrc)
     nvvidconvsrc.link(caps_vidconvsrc)
-
+    
     sinkpad = streammux.get_request_pad("sink_0")
     if not sinkpad:
         sys.stderr.write(" Unable to get the sink pad of streammux \n")
@@ -348,12 +475,20 @@ def main(args):
     pgie.link(tracker)
     tracker.link(nvvidconv)
     nvvidconv.link(nvosd)
-    if is_aarch64():
-        nvosd.link(transform)
-        transform.link(sink)
-    else:
-        nvosd.link(sink)
-
+    nvosd.link(nvvidconv2)
+    nvvidconv2.link(capsfilter)
+    capsfilter.link(encoder)
+    encoder.link(codeparser)
+    
+    sink.get_static_pad("sink").send_event(Gst.Event.new_eos())
+    sinkpad1 = container.get_request_pad("video_0")
+    if not sinkpad1:
+        sys.stderr.write(" Unable to get the sink pad of qtmux \n")
+    srcpad1 = codeparser.get_static_pad("src")
+    if not srcpad1:
+        sys.stderr.write(" Unable to get mpeg4 parse src pad \n")
+    srcpad1.link(sinkpad1)
+    container.link(sink)
 
     # create and event loop and feed gstreamer bus mesages to it
     loop = GObject.MainLoop()
@@ -374,12 +509,33 @@ def main(args):
     
     # start play back and listed to events
     pipeline.set_state(Gst.State.PLAYING)
+    GObject.timeout_add_seconds(runtime, quit_loop, loop)
     try:
       loop.run()
     except:
       pass
 
     # cleanup
+    # sort motchallenge .txt file with the frame number and id
+    fn = 'track.txt'
+    
+    # save txt file the same as script name
+    sorted_fn = 'results/'+script+'_'+timestr+'.txt'
+    # save utils
+    utils = 'results/'+script+'_'+timestr+'_utils.txt'
+    shutil.copyfile('utils.txt', utils)
+
+    with open(fn,'r') as first_file:
+        rows = first_file.readlines()
+        sorted_rows = sorted(rows, key=lambda x: (int(x.split(',')[0]), int(x.split(',')[1])), reverse=False)
+        with open(sorted_fn,'w+') as second_file:
+            for row in sorted_rows:
+                second_file.write(row)
+    new_file = os.path.join("results/", script+'_'+timestr+"_MOTA.txt")
+    os.rename("mota.txt", new_file)
+    os.remove('track.txt')
+    os.remove('utils.txt')
+    
     pipeline.set_state(Gst.State.NULL)
 
 if __name__ == '__main__':

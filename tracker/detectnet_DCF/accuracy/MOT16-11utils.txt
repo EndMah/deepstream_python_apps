@@ -1,0 +1,3 @@
+AvgCPU=89.2%
+AvgMem=80.5%
+AvgSwap=13.0%
