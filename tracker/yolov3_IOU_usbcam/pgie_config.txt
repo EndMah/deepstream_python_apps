@@ -57,6 +57,5 @@ detected-min-h=0
 detected-max-w=0
 detected-max-h=0
 
-
-[class-attrs-3]
-threshold=1.1
+[class-attrs-1]
+nms-iou-threshold=0.9

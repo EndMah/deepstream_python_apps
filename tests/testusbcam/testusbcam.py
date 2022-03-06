@@ -27,22 +27,11 @@ import cv2
 import pyds
 import time
 import gi
-import shutil
-import psutil
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst, GLib, GstBase
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
-
-# Experiment configs
-# number of objects in real time experiment
-num_obj=2
-# Experiment runtime in seconds 
-runtime=15
-# camera resolution
-width=1280
-height=720
 
 timestr = time.strftime("%Y%m%d-%H%M%S")
 PGIE_CLASS_ID_VEHICLE = 0
@@ -53,15 +42,19 @@ past_tracking_meta=[0]
 fps_streams={}
 fpsarray=[]
 motarray=[]
-cpuarray=[]
-memarray=[]
-swaparray=[]
-utilsarray=[]
-
 # MOTA values, with mme calculated manually from video
 miss=0
 fp=0
 gt=0
+
+# Experiment configs
+# number of objects in real time experiment
+num_obj=1
+# Experiment runtime in seconds 
+runtime=10
+# camera resolution
+width=1280
+height=720
 
 def osd_sink_pad_buffer_probe(pad,info,u_data):
     frame_number=0
@@ -90,7 +83,6 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
     while l_frame is not None:
         f=open("track.txt","w+")
         mota=open("mota.txt","w+")
-        txtutils=open("utils.txt","w+")
         try:
             # Note that l_frame.data needs a cast to pyds.NvDsFrameMeta
             # The casting is done by pyds.NvDsFrameMeta.cast()
@@ -104,7 +96,8 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         frame_number=frame_meta.frame_num+1
         num_rects = frame_meta.num_obj_meta
         l_obj=frame_meta.obj_meta_list
-        
+        #if frame_number==20:
+            #sys.exit(1)
         # gathering MOTA values, with mme calculated manually from video
         # total gt
         gt+=num_obj
@@ -159,26 +152,14 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         fps = fps_streams["stream{0}".format(frame_meta.pad_index)].calc_fps()
         fpsarray.append(fps)
         fps = "%.1f"%(fps)
-        avgfps = "%.1f"%(sum(fpsarray)/len(fpsarray))
-        # cpu usage counter
-        cpu = psutil.cpu_percent()
-        cpuarray.append(cpu)
-        avgcpu = "%.1f"%(sum(cpuarray)/len(cpuarray))
-        # memory usage counter
-        memory = psutil.virtual_memory().percent
-        memarray.append(memory)
-        avgmem = "%.1f"%(sum(memarray)/len(memarray))
-        # swap usage counter
-        swap = psutil.swap_memory().percent
-        swaparray.append(swap)
-        avgswap = "%.1f"%(sum(swaparray)/len(swaparray))
-        
+        avg = "%.1f"%(sum(fpsarray)/len(fpsarray))
+
         # Setting display text to be shown on screen
         # Note that the pyds module allocates a buffer for the string, and the
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nCPU={}% AvgCPU={}% Memory={}% Avg Memory={}% Swap={}% Avg Swap={}%\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avgfps, frame_number, cpu, avgcpu, memory, avgmem, swap, avgswap, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
+        py_nvosd_text_params.display_text = "FPS={} Avg FPS={} Frame Number={}\nNumber of Objects={} Vehicle_count={} Person_count={}".format(fps, avg, frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
 
         # Now set the offsets where the string should appear
         py_nvosd_text_params.x_offset = 10
@@ -197,9 +178,6 @@ def osd_sink_pad_buffer_probe(pad,info,u_data):
         # Using pyds.get_string() to get display_text as string
         print(pyds.get_string(py_nvosd_text_params.display_text))
         pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
-        
-        txtutils.writelines('AvgCPU='+avgcpu+'%\nAvgMem='+avgmem+'%\nAvgSwap='+avgswap+'%')
-        txtutils.close()
         try:
             l_frame=l_frame.next
         except StopIteration:
@@ -272,9 +250,8 @@ def main(args):
     if len(args) != 2:
         sys.stderr.write("usage: %s <v4l2-device-path>\n" % args[0])
         sys.exit(1)
-    #get name of script
-    script=os.path.basename(args[0])
-    script=os.path.splitext(script)[0]
+    # get name of script
+    base=os.path.basename(args[0])
     for i in range(0,len(args)-1):
         fps_streams["stream{0}".format(i)]=GETFPS(i)
     number_sources=len(args)-1
@@ -387,7 +364,7 @@ def main(args):
     if not sink:
         sys.stderr.write(" Unable to create file sink \n")
         
-    sink.set_property("location", 'results/'+script+'_'+timestr+'.mkv')
+    sink.set_property("location", 'results/'+os.path.splitext(base)[0]+timestr+'.mkv')
     sink.set_property("sync", 1)
     sink.set_property("async", 0)
     sink.set_property("qos",0)
@@ -517,10 +494,8 @@ def main(args):
     if not os.path.exists('results/'):
         os.makedirs('results/')
     # save txt file the same as script name
-    sorted_fn = 'results/'+script+'_'+timestr+'.txt'
-    # save utils
-    utils = 'results/'+script+'_'+timestr+'_utils.txt'
-    shutil.copyfile('utils.txt', utils)
+    
+    sorted_fn = 'results/'+os.path.splitext(base)[0]+timestr+'.txt'
 
     with open(fn,'r') as first_file:
         rows = first_file.readlines()
@@ -528,11 +503,10 @@ def main(args):
         with open(sorted_fn,'w+') as second_file:
             for row in sorted_rows:
                 second_file.write(row)
-    new_file = os.path.join("results/", script+'_'+timestr+"_MOTA.txt")
+    # save MOTA values in text file
+    #motatxt='results/'+os.path.splitext(base)[0]+timestr+'_MOTA.txt'
+    new_file = os.path.join("results/", os.path.splitext(base)[0]+timestr+"_MOTA.txt")
     os.rename("mota.txt", new_file)
-    os.remove('track.txt')
-    os.remove('utils.txt')
-    
     pipeline.set_state(Gst.State.NULL)
 
 if __name__ == '__main__':

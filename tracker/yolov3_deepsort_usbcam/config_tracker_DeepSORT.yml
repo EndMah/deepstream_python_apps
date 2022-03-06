@@ -45,7 +45,7 @@ DataAssociator:
   # Thresholds in matching scores to be considered as a valid candidate for matching
   minMatchingScore4Overall: 0.8   # Min total score
   minMatchingScore4SizeSimilarity: 0.6  # Min bbox size similarity score
-  minMatchingScore4Iou: 0.3       # Min IOU score
+  minMatchingScore4Iou: 0.0       # Min IOU score
   thresholdMahalanobis: 9.4877    # Max Mahalanobis distance based on Chi-square probabilities
 
 StateEstimator:
@@ -65,11 +65,11 @@ ReID:
   inferDims: [128, 64, 3] # reid network input dimension CHW or HWC based on inputOrder
   inputOrder: 1 # reid network input order among { NCHW=0, NHWC=1 }
   colorFormat: 0 # reid network input color format among {RGB=0, BGR=1 }
-  networkMode: 1 # reid network inference precision mode among {fp32=0, fp16=1, int8=2 }
+  networkMode: 0 # reid network inference precision mode among {fp32=0, fp16=1, int8=2 }
   offsets: [0.0, 0.0, 0.0]  # array of values to be subtracted from each input channel, with length equal to number of channels
   netScaleFactor: 1.0 # # scaling factor for reid network input after substracting offsets
   inputBlobName: "images" # reid network input layer name
   outputBlobName: "features" # reid network output layer name
   uffFile: "/opt/nvidia/deepstream/deepstream-6.0/sources/tracker_DeepSORT/mars-small128.uff" # absolute path to reid network uff model
-  modelEngineFile: "/opt/nvidia/deepstream/deepstream-6.0/sources/tracker_DeepSORT/mars-small128.uff_b100_gpu0_fp16.engine" # engine file path
+  modelEngineFile: "/opt/nvidia/deepstream/deepstream/samples/models/tracker_DeepSORT/mars-small128.uff_b100_gpu0_fp16.engine" # engine file path
   keepAspc: 1 # whether to keep aspc ratio when resizing input objects for reid
