@@ -31,7 +31,6 @@ tlt-encoded-model=../../../../samples/models/tao_pretrained_models/frcnn/frcnn_k
 int8-calib-file=../../../../samples/models/tao_pretrained_models/frcnn/cal_trt8.bin
 tlt-model-key=nvidia_tlt
 infer-dims=3;544;960
-maintain-aspect-ratio=1
 uff-input-order=0
 uff-input-blob-name=input_image
 batch-size=1
@@ -47,10 +46,12 @@ parse-bbox-func-name=NvDsInferParseCustomNMSTLT
 custom-lib-path=/opt/nvidia/deepstream/deepstream-6.0/lib/libnvds_infercustomparser.so
 
 [class-attrs-all]
-pre-cluster-threshold=0.2
-#roi-top-offset=0
-#roi-bottom-offset=0
-#detected-min-w=0
-#detected-min-h=0
-#detected-max-w=0
-#detected-max-h=0
+pre-cluster-threshold=0.6
+roi-top-offset=0
+roi-bottom-offset=0
+detected-min-w=0
+detected-min-h=0
+detected-max-w=0
+detected-max-h=0
+[class-attrs-4]
+pre-cluster-threshold=1.1

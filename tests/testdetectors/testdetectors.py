@@ -349,7 +349,7 @@ def main(args):
     streammux.set_property('live-source', 1)
 
     #Set properties of pgie
-    pgie.set_property('config-file-path', "pgie_config.txt")
+    pgie.set_property('config-file-path', "ssd_pgie_config.txt")
 
     #Set properties of tracker
     config = configparser.ConfigParser()

@@ -1,0 +1,4 @@
+AvgFPS=8.2
+AvgCPU=88.9%
+AvgMem=78.9%
+AvgSwap=12.0%
