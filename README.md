@@ -10,7 +10,7 @@ Bachelor Thesis Title: "Vergleich von Algorithmen für die Echtzeit-Mehrobjektve
 
 Repository is forked from: https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
 
-This repository contains python apps to run deepstream tracker pipeline with either uri source such as .mp4 file for MOTChallenge Benchmark or usb camera for real-time comparison.
+The python scripts in the folder [tracker](./tracker) are used to run deepstream tracker pipeline with either uri source such as .mp4 file for MOTChallenge Benchmark or usb camera for real-time comparison.
 
 Please refer to [HOW-TO Guide](HOWTO.md) to install prerequisites, to clone this repository in the right directory, and to run the applications.
 
